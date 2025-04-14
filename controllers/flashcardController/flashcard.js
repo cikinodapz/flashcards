@@ -14,7 +14,13 @@ const getFlashcardsByDeck = async (req, res) => {
     // Ambil semua flashcard dalam deck
     const flashcards = await prisma.flashcard.findMany({ where: { deckId } });
 
-    res.status(200).json({ flashcards });
+    // Tambahkan base URL menggunakan SERVER_HOST
+    const flashcardsWithFullUrl = flashcards.map(card => ({
+      ...card,
+      imageUrl: card.imageUrl // Tidak menambahkan host, hanya path
+    }));
+
+    res.status(200).json({ flashcards: flashcardsWithFullUrl });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Terjadi kesalahan server" });
@@ -24,16 +30,14 @@ const getFlashcardsByDeck = async (req, res) => {
 const createFlashcard = async (req, res) => {
   try {
     const { question, answer } = req.body;
-    const { deckId } = req.params; // Jangan parseInt karena deckId berupa String
+    const { deckId } = req.params;
     const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
 
-    // Pastikan deckId ada di database
     const deckExists = await prisma.deck.findUnique({ where: { id: deckId } });
     if (!deckExists) {
       return res.status(404).json({ message: "Deck tidak ditemukan!" });
     }
 
-    // Buat flashcard baru dalam deck yang sesuai
     const newFlashcard = await prisma.flashcard.create({
       data: { question, answer, deckId, imageUrl },
     });
@@ -91,13 +95,23 @@ const deleteFlashcard = async (req, res) => {
       return res.status(404).json({ message: "Flashcard tidak ditemukan!" });
     }
 
-    // Hapus flashcard
-    await prisma.flashcard.delete({ where: { id: flashcardId } });
+    // Pertama, hapus semua progress yang terkait dengan flashcard ini
+    await prisma.progress.deleteMany({
+      where: { flashcardId: flashcardId }
+    });
+
+    // Kemudian hapus flashcard
+    await prisma.flashcard.delete({ 
+      where: { id: flashcardId } 
+    });
 
     res.status(200).json({ message: "Flashcard berhasil dihapus!" });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Terjadi kesalahan server" });
+    res.status(500).json({ 
+      message: "Terjadi kesalahan server",
+      error: error.message // Tambahkan pesan error untuk debugging
+    });
   }
 };
 
