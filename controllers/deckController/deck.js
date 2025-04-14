@@ -93,15 +93,30 @@ const deleteDeck = async (req, res) => {
       return res.status(404).json({ message: "Deck tidak ditemukan atau bukan milik Anda" });
     }
 
-    // Hapus deck
-    await prisma.deck.delete({
-      where: { id },
-    });
+    // Gunakan transaksi untuk menghapus Progress, Flashcard, dan Deck
+    await prisma.$transaction([
+      // Hapus semua Progress yang terkait dengan Flashcard di Deck ini
+      prisma.progress.deleteMany({
+        where: {
+          flashcard: {
+            deckId: id,
+          },
+        },
+      }),
+      // Hapus semua Flashcard yang terkait dengan Deck
+      prisma.flashcard.deleteMany({
+        where: { deckId: id },
+      }),
+      // Hapus Deck
+      prisma.deck.delete({
+        where: { id },
+      }),
+    ]);
 
     res.status(200).json({ message: "Deck berhasil dihapus" });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Terjadi kesalahan server" });
+    console.error('Delete deck error:', error);
+    res.status(500).json({ message: "Terjadi kesalahan server", error: error.message });
   }
 };
 
