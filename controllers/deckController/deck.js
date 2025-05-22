@@ -6,6 +6,7 @@ const getDecks = async (req, res) => {
   try {
     const userId = req.user.userId; // Ambil user ID dari token
 
+    // Ambil semua deck milik user
     const decks = await prisma.deck.findMany({
       where: { userId },
       select: {
@@ -13,10 +14,40 @@ const getDecks = async (req, res) => {
         name: true,
         category: true,
         createdAt: true,
+        flashcards: {
+          select: {
+            id: true,
+            progress: {
+              where: { userId, status: 'MASTERED' }, // Hanya ambil progress MASTERED
+              select: { id: true }, // Minimal data untuk efisiensi
+            },
+          },
+        },
       },
     });
 
-    res.status(200).json({ message: "Daftar deck", decks });
+    // Transformasi data untuk menyertakan progress
+    const decksWithProgress = decks.map((deck) => {
+      const totalFlashcards = deck.flashcards.length;
+      const masteredFlashcards = deck.flashcards.filter((flashcard) =>
+        flashcard.progress.length > 0 // Hitung flashcard dengan status MASTERED
+      ).length;
+      const percentage = totalFlashcards > 0
+        ? Math.round((masteredFlashcards / totalFlashcards) * 100)
+        : 0;
+
+      return {
+        id: deck.id,
+        name: deck.name,
+        category: deck.category,
+        createdAt: deck.createdAt,
+        flashcardCount: totalFlashcards,
+        mastered: masteredFlashcards,
+        percentage, // Persentase penyelesaian
+      };
+    });
+
+    res.status(200).json({ message: "Daftar deck", decks: decksWithProgress });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Terjadi kesalahan server" });
