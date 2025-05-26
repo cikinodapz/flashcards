@@ -1,6 +1,58 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
+const getProfile = async (req, res) => {
+  try {
+    const userId = req.user.userId; // Ambil userId dari token JWT
+
+    // Ambil data pengguna beserta deck-nya dan hitung total deck
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        createdAt: true,
+        updatedAt: true,
+        decks: {
+          select: {
+            id: true,
+            name: true,
+            category: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+        _count: {
+          select: { decks: true }, // Hitung total deck
+        },
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: 'Pengguna tidak ditemukan' });
+    }
+
+    // Restrukturasi respons untuk menyertakan total deck
+    const response = {
+      message: 'Profil berhasil diambil',
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+        totalDecks: user._count.decks, // Total deck
+        decks: user.decks,
+      },
+    };
+
+    res.status(200).json(response);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Terjadi kesalahan server' });
+  }
+};
 
 const getDecks = async (req, res) => {
   try {
@@ -155,4 +207,4 @@ const deleteDeck = async (req, res) => {
 
 
 
-module.exports = {getDecks, createDeck,updateDeck,deleteDeck };
+module.exports = {getProfile,getDecks, createDeck,updateDeck,deleteDeck };

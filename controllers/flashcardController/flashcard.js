@@ -129,11 +129,9 @@ const copyFlashcardsToDeck = async (req, res) => {
       !Array.isArray(flashcardIds) ||
       flashcardIds.length === 0
     ) {
-      return res
-        .status(400)
-        .json({
-          message: "ID Flashcard harus berupa array dan tidak boleh kosong.",
-        });
+      return res.status(400).json({
+        message: "ID Flashcard harus berupa array dan tidak boleh kosong.",
+      });
     }
 
     // 2. Cek apakah deck tujuan ada
@@ -205,11 +203,9 @@ const moveFlashcardsToDeck = async (req, res) => {
       !Array.isArray(flashcardIds) ||
       flashcardIds.length === 0
     ) {
-      return res
-        .status(400)
-        .json({
-          message: "ID Flashcard harus berupa array dan tidak boleh kosong.",
-        });
+      return res.status(400).json({
+        message: "ID Flashcard harus berupa array dan tidak boleh kosong.",
+      });
     }
 
     // 2. Cek apakah deck tujuan ada
@@ -291,11 +287,9 @@ const moveFlashcardsToDeck = async (req, res) => {
     });
   } catch (error) {
     console.error("Error saat memindahkan flashcard:", error);
-    res
-      .status(500)
-      .json({
-        message: "Terjadi kesalahan server saat memindahkan flashcard.",
-      });
+    res.status(500).json({
+      message: "Terjadi kesalahan server saat memindahkan flashcard.",
+    });
   }
 };
 
@@ -490,6 +484,18 @@ const answerFlashcard = async (req, res) => {
       });
     }
 
+    // Create history record
+    await prisma.history.create({
+      data: {
+        userId,
+        flashcardId,
+        deckId: flashcard.deckId,
+        userAnswer,
+        isCorrect,
+        status,
+      },
+    });
+
     // Calculate progress
     const deckProgress = await calculateDeckProgress(flashcard.deckId, userId);
 
@@ -513,6 +519,125 @@ const answerFlashcard = async (req, res) => {
   }
 };
 
+// Endpoint untuk mendapatkan riwayat belajar user
+const getLearningHistory = async (req, res) => {
+  try {
+    if (!req.user || !req.user.userId) {
+      return res.status(401).json({ message: "Unauthorized: User not found" });
+    }
+
+    const userId = req.user.userId;
+    const { deckId, limit } = req.query;
+
+    const history = await prisma.history.findMany({
+      where: {
+        userId,
+        ...(deckId && { deckId }), // Filter by deckId jika ada
+      },
+      include: {
+        flashcard: true,
+        deck: {
+          select: {
+            name: true,
+            category: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      take: limit ? parseInt(limit) : undefined, // Limit hasil jika ada
+    });
+
+    res.status(200).json({
+      history: history.map(record => ({
+        id: record.id,
+        question: record.flashcard.question,
+        userAnswer: record.userAnswer,
+        correctAnswer: record.flashcard.answer,
+        isCorrect: record.isCorrect,
+        status: record.status,
+        deckName: record.deck.name,
+        deckCategory: record.deck.category,
+        createdAt: record.createdAt,
+      })),
+    });
+  } catch (error) {
+    console.error("Error fetching learning history:", error);
+    res.status(500).json({
+      message: "Terjadi kesalahan server",
+      error: error.message,
+    });
+  }
+};
+
+const getLearningStats = async (req, res) => {
+  try {
+    if (!req.user || !req.user.userId) {
+      return res.status(401).json({ message: "Unauthorized: User not found" });
+    }
+
+    const userId = req.user.userId;
+
+    // Total flashcards attempted
+    const totalAttempts = await prisma.history.count({
+      where: { userId },
+    });
+
+    // Correct answers
+    const correctAnswers = await prisma.history.count({
+      where: { userId, isCorrect: true },
+    });
+
+    // Accuracy percentage
+    const accuracy = totalAttempts > 0 
+      ? Math.round((correctAnswers / totalAttempts) * 100)
+      : 0;
+
+    // Recently studied decks
+    const recentDecks = await prisma.history.findMany({
+      where: { userId },
+      distinct: ['deckId'],
+      include: {
+        deck: {
+          select: {
+            id: true,
+            name: true,
+            category: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      take: 5,
+    });
+
+    res.status(200).json({
+      stats: {
+        totalAttempts,
+        correctAnswers,
+        accuracy,
+        recentDecks: recentDecks.map(deck => ({
+          id: deck.deck.id,
+          name: deck.deck.name,
+          category: deck.deck.category,
+        })),
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching learning stats:", error);
+    res.status(500).json({
+      message: "Terjadi kesalahan server",
+      error: error.message,
+    });
+  }
+};
+
+// Tambahkan route di router
+
+
+
 module.exports = {
   getFlashcardsByDeck,
   createFlashcard,
@@ -522,4 +647,6 @@ module.exports = {
   moveFlashcardsToDeck,
   startQuiz,
   answerFlashcard,
+  getLearningHistory,
+  getLearningStats,
 };

@@ -22,6 +22,8 @@ model User {
   progress  Progress[]
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
+
+  History History[]
 }
 
 model Deck {
@@ -33,6 +35,8 @@ model Deck {
   flashcards Flashcard[]
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
+
+  History History[]
 }
 
 model Flashcard {
@@ -45,6 +49,8 @@ model Flashcard {
   progress  Progress[]
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
+
+  History History[]
 }
 
 model Progress {
@@ -56,4 +62,18 @@ model Progress {
   status      String
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+}
+
+model History {
+  id          String    @id @default(uuid()) @db.Uuid
+  user        User      @relation(fields: [userId], references: [id])
+  userId      String    @db.Uuid
+  flashcard   Flashcard @relation(fields: [flashcardId], references: [id])
+  flashcardId String    @db.Uuid
+  deck        Deck      @relation(fields: [deckId], references: [id])
+  deckId      String    @db.Uuid
+  userAnswer  String
+  isCorrect   Boolean
+  status      String    // Status setelah menjawab (MASTERED/NEEDS_REVIEW)
+  createdAt   DateTime  @default(now())
 }
